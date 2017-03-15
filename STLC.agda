@@ -2,8 +2,6 @@ open import Level renaming (zero to lzero; suc to lsuc)
 
 open import Algebra using (module Monoid)
 open import Data.Empty
-open import Data.List hiding ([_])
-open import Data.List.All hiding (lookup; tabulate)
 open import Data.Nat
 open import Data.Product
 open import Data.Sum hiding (map)
@@ -19,28 +17,37 @@ data Type : Set where
 
 
 ---------- Contexts ----------
-Cx : Set
-Cx = List Type
-
-open Monoid (Data.List.monoid Type) using () renaming (assoc to ++-assoc)
+Cx : Set1
+Cx = Type -> Set
 
 infix 4 _∈_
-data _∈_ (b : Type) : Cx -> Set where
-  here : ∀{as} -> b ∈ b ∷ as
-  next : ∀{a as} -> b ∈ as -> b ∈ a ∷ as
+_∈_ : Type -> Cx -> Set
+a ∈ X = X a
+
+hyp : Type -> Cx
+hyp = _≡_
+
+infixr 4 _∪_
+_∪_ : Cx -> Cx -> Cx
+(X ∪ Y) a = X a ⊎ Y a
+
+infixr 4 _∷_
+_∷_ : Type -> Cx -> Cx
+a ∷ X = hyp a ∪ X
+
+pattern here = inj₁ refl
+pattern next x = inj₂ x
 
 -- Context renamings
 infix 1 _⊆_
 _⊆_ : Cx -> Cx -> Set
-X ⊆ Y = ∀ {a} -> a ∈ X -> a ∈ Y
+X ⊆ Y = ∀ {a} -> X a -> Y a
 
-∷/⊆ : ∀ {a L R} -> L ⊆ R -> a ∷ L ⊆ a ∷ R
-∷/⊆ f here = here
-∷/⊆ f (next x) = next (f x)
+∪/⊆ : ∀ {X L R} -> L ⊆ R -> X ∪ L ⊆ X ∪ R
+∪/⊆ f = Data.Sum.map id f
 
-⊆++l : ∀ L {R} -> R ⊆ L ++ R
-⊆++l [] = id
-⊆++l (a ∷ as) x = next (⊆++l as x)
+∷/⊆ : ∀ L {R a} -> L ⊆ R -> a ∷ L ⊆ a ∷ R
+∷/⊆ _ = ∪/⊆
 
 
 ---------- Terms ----------
@@ -53,7 +60,7 @@ data _⊢_ (X : Cx) : Type -> Set where
 -- Renaming
 rename : ∀{X Y a} -> X ⊆ Y -> X ⊢ a -> Y ⊢ a
 rename f (var x) = var (f x)
-rename {a = a ⊃ b} f (lam M) = lam (rename (∷/⊆ f) M)
+rename {X} f (lam M) = lam (rename (∷/⊆ X f) M)
 rename f (app M N) = app (rename f M) (rename f N)
 
 
@@ -74,7 +81,7 @@ mutual
 
 rename⇐ : ∀{X Y a} -> X ⊆ Y -> X ⇐ a -> Y ⇐ a
 rename⇒ : ∀{X Y a} -> X ⊆ Y -> X ⇒ a -> Y ⇒ a
-rename⇐ r (lam M) = lam (rename⇐ (∷/⊆ r) M)
+rename⇐ {X} r (lam M) = lam (rename⇐ (∷/⊆ X r) M)
 rename⇐ r (neu R) = neu (rename⇒ r R)
 rename⇒ r (var x) = var (r x)
 rename⇒ r (app R M) = app (rename⇒ r R) (rename⇐ r M)
@@ -112,60 +119,31 @@ rename⇒ r (app R M) = app (rename⇒ r R) (rename⇐ r M)
 
 -- HOLY SHIT IT WORKS
 module ReifySimple where
-  [_⊢_] : Cx -> Type -> Set
-  [ X ⊢ base a ] = X ⇒ base a
+  [_⊢_] : Cx -> Type -> Set1
+  [ X ⊢ base a ] = Lift (X ⇒ base a)
   [ X ⊢ a ⊃ b ] = ∀ {Y} -> X ⊆ Y -> [ Y ⊢ a ] -> [ Y ⊢ b ]
 
   reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
   reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
-  reify (base a) x = neu x
+  reify (base a) (lift x) = neu x
   reify (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
-  reflect (base a) R = R
+  reflect (base a) R = lift R
   reflect (a ⊃ b) R X⊆Y x = reflect b (app (rename⇒ X⊆Y R) (reify a x))
 
-
--- Reify & reflect, parameterized over a given semantics
-record ReifySem i : Set (lsuc i) where
-  field
-    [_⊢_] : Cx -> Type -> Set i
-    weaken : ∀{X a c} -> [ X ⊢ c ] -> [ a ∷ X ⊢ c ]
-    baseI : ∀{X a} -> X ⇒ base a -> [ X ⊢ base a ]
-    baseE : ∀{X a} -> [ X ⊢ base a ] -> X ⇒ base a
-    ⊃I : ∀{X a b} -> (∀ {Y} -> X ⊆ Y -> [ Y ⊢ a ] -> [ Y ⊢ b ]) -> [ X ⊢ a ⊃ b ]
-    ⊃E : ∀{X a b} -> [ X ⊢ a ⊃ b ] -> [ X ⊢ a ] -> [ X ⊢ b ]
-
-  reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
-  reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
-  reify (base a) x = neu (baseE x)
-  reify {X} (a ⊃ b) f = lam (reify b (⊃E (weaken {c = a ⊃ b} f) (reflect a (var here))))
-  reflect (base a) R = baseI R
-  reflect (a ⊃ b) R = ⊃I (λ X⊆Y x -> reflect b (app (rename⇒ X⊆Y R) (reify a x)))
-
-
--- -- HOLY SHIT IT WORKS
--- module ReifyOld where
---   [_⊢_] : Cx -> Type -> Set
---   -- this is the only place I use the context. hmmmm.
---   [ X ⊢ base a ] = X ⇒ base a
---   -- I suspect this is insufficiently generic.
---   [ X ⊢ a ⊃ b ] = ∀ Y -> [ Y ++ X ⊢ a ] -> [ Y ++ X ⊢ b ]
---   -- TODO: Try instead:
---   -- [ X ⊢ a ⊃ b ] = ∀ {Y} -> X ⊆ Y -> [ Y ⊢ a ] -> [ Y ⊢ b ]
-
---   fux : ∀ {X a} -> [ X ⊢ base a ] -> X ⇒ base a
---   fux = λ z -> z
---   call : ∀ X a b -> [ X ⊢ a ⊃ b ] -> [ X ⊢ a ] -> [ X ⊢ b ]
---   call = λ X a b z → z []
---   weak : ∀ X Y c -> [ X ⊢ c ] -> [ Y ++ X ⊢ c ]
---   weak X Y (base c) x = rename⇒ (⊆++l Y) x
---   weak X Y (c ⊃ d) f Z = subst P (++-assoc Z Y X) (f (Z ++ Y))
---     where P = λ x -> [ x ⊢ c ] -> [ x ⊢ d ]
+-- 
+-- -- Reify & reflect, parameterized over a given semantics
+-- record ReifySem i : Set (lsuc i) where
+--   field
+--     [_⊢_] : Cx -> Type -> Set i
+--     weaken : ∀{X a c} -> [ X ⊢ c ] -> [ a ∷ X ⊢ c ]
+--     baseI : ∀{X a} -> X ⇒ base a -> [ X ⊢ base a ]
+--     baseE : ∀{X a} -> [ X ⊢ base a ] -> X ⇒ base a
+--     ⊃I : ∀{X a b} -> (∀ {Y} -> X ⊆ Y -> [ Y ⊢ a ] -> [ Y ⊢ b ]) -> [ X ⊢ a ⊃ b ]
+--     ⊃E : ∀{X a b} -> [ X ⊢ a ⊃ b ] -> [ X ⊢ a ] -> [ X ⊢ b ]
 
 --   reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
 --   reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
---   reify (base a) x = neu (fux x)
---   reify {X} (a ⊃ b) f =
---     lam (reify b (call (a ∷ X) a b (weak X (a ∷ []) (a ⊃ b) f) (reflect a (var here))))
---   reflect (base a) R = R
---   -- reflect (a ⊃ b) R v = reflect b (app R (reify a v))
---   reflect (a ⊃ b) R Y v = reflect b (app (rename⇒ (⊆++l Y) R) (reify a v))
+--   reify (base a) x = neu (baseE x)
+--   reify {X} (a ⊃ b) f = lam (reify b (⊃E (weaken {c = a ⊃ b} f) (reflect a (var here))))
+--   reflect (base a) R = baseI R
+--   reflect (a ⊃ b) R = ⊃I (λ X⊆Y x -> reflect b (app (rename⇒ X⊆Y R) (reify a x)))
