@@ -85,10 +85,6 @@ rename⇒ r (var x) = var (r x)
 rename⇒ r (app R M) = app (rename⇒ r R) (rename⇐ r M)
 
 
----------- Normalisation by evaluation ----------
--- Based on a talk by Sam Lindley from 2016:
--- http://homepages.inf.ed.ac.uk/slindley/nbe/nbe-cambridge2016.pdf
-
 -- module Semantics {i} (Base : Type -> Set i) where
 --   -- Denotation of types.
 --   set : Type -> Set _
@@ -115,7 +111,14 @@ rename⇒ r (app R M) = app (rename⇒ r R) (rename⇐ r M)
 --   den (app M N) ρ = den M ρ (den N ρ)
 
 
--- HOLY SHIT IT WORKS
+---------- Normalisation by evaluation ----------
+-- Based on a talk by Sam Lindley from 2016:
+-- http://homepages.inf.ed.ac.uk/slindley/nbe/nbe-cambridge2016.pdf
+--
+-- Adapted to handle terms with explicitly typed contexts (Sam's slides only
+-- consider "open" terms with unspecified environments). From the below, it
+-- looks easy, but trust me, it wasn't.
+
 module ReifySimple where
   [_⊢_] : Cx -> Type -> Set1
   [ X ⊢ base ] = Lift (X ⇒ base)
@@ -128,6 +131,7 @@ module ReifySimple where
   reflect base R = lift R
   reflect (a ⊃ b) R X⊆Y x = reflect b (app (rename⇒ X⊆Y R) (reify a x))
 
+
 -- 
 -- -- Reify & reflect, parameterized over a given semantics
 -- record ReifySem i : Set (lsuc i) where
