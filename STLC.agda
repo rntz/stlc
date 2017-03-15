@@ -173,36 +173,6 @@ module ContextNBE where
   normalize M = reify _ (den M id*)
 
 
----------- Normalisation by evaluation ----------
--- Based on a talk by Sam Lindley from 2016:
--- http://homepages.inf.ed.ac.uk/slindley/nbe/nbe-cambridge2016.pdf
---
--- crap, this approach is impossible too!
--- you just can't use terms with intrinsic contexts!
--- you need *named* variables.
-module SamNBE where
-  NF NE : Type -> Set1
-  NF a = Σ[ X ∈ Cx ] (X ⇐ a)
-  NE a = Σ[ X ∈ Cx ] (X ⇒ a)
-
-  open Semantics (NE base) public
-
-  Lam : ∀{a b} -> (NE a -> NF b) -> NF (a ⊃ b)
-  Lam {a} body with body (hyp _ , var refl)
-  ... | X , M = X , lam {!M!}
-
-  -- this is hopeless as well.
-  App : ∀{a b} -> NE (a ⊃ b) -> NF a -> NE b
-  App (X , R) (Y , M) = {!!}
-
-  reify : ∀ a -> set a -> NF a
-  reflect : ∀ a -> NE a -> set a
-  reify base (X , R) = X , neu R
-  reify (a ⊃ b) f = Lam (λ x -> reify b (f (reflect a x)))
-  reflect base R = R
-  reflect (a ⊃ b) R x = reflect b (App R (reify a x))
-
-
 -- Reify & reflect, parameterized over a given semantics
 record ReifySem i : Set (lsuc i) where
   field
