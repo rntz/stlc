@@ -126,39 +126,21 @@ module Semantics {i} (Base : Set i) where
 -- http://homepages.inf.ed.ac.uk/slindley/nbe/nbe-cambridge2016.pdf
 --
 -- Adapted to handle terms with explicitly typed contexts (Sam's slides only
--- consider "open" terms with unspecified environments). From the below, it
--- looks easy, but trust me, it wasn't.
---
--- aaaand I'm not sure it actually works!
+-- consider "open" terms with unspecified environments). It was a pain in the
+-- ass to figure out.
 
-module WeirdNBE where
-  [_⊢_] : Cx -> Type -> Set1
-  [ X ⊢ base ] = Lift (X ⇒ base)
-  [ X ⊢ a ⊃ b ] = ∀ {Y} (s : X ⊆ Y) -> [ Y ⊢ a ] -> [ Y ⊢ b ]
-
-  reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
-  reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
-  reify base (lift x) = neu x
-  reify (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
-  reflect base R = lift R
-  reflect (a ⊃ b) R X⊆Y x = reflect b (app (rename⇒ X⊆Y R) (reify a x))
-
-  Lam : ∀{X a b} -> [ a ∷ X ⊢ b ] -> [ X ⊢ a ⊃ b ]
-  Lam body s x = {!reify _ body!}
-
-  den : ∀{X a} -> X ⊢ a -> [ X ⊢ a ]
-  den (var v) = reflect _ (var v)
-  -- den (lam M) X⊆Y x = {!reify _ (den M)!}
-  den (lam M) = Lam (den M)
-  den (app M N) = den M id (den N)
-
-
-module Weird2NBE where
+module ContextNBE where
   [_⊢_] : Cx -> Type -> Set1
   [ X ⊢ base ] = Lift (X ⇒ base)
   [ X ⊢ a ⊃ b ] = ∀ {Y} -> [ Y ⊢ a ] -> [ Y ∪ X ⊢ b ]
-  -- I'm not sure there's any reason to prefer the above to the old definition:
-  -- [ X ⊢ a ⊃ b ] = ∀ {Y} (s : X ⊆ Y) -> [ Y ⊢ a ] -> [ Y ⊢ b ]
+
+  -- An alternative definition would be:
+  --
+  --     [ X ⊢ a ⊃ b ] = ∀ {Y} (s : X ⊆ Y) -> [ Y ⊢ a ] -> [ Y ⊢ b ]
+  --
+  -- I prefer the one with ∪ because it's more precise about what the function
+  -- does to variable bindings. I'm not sure if there's any principled reason to
+  -- prefer one to the other.
 
   rename* : ∀{X Y} (s : X ⊆ Y) {a} -> [ X ⊢ a ] -> [ Y ⊢ a ]
   rename* s {base} (lift x) = lift (rename⇒ s x)
@@ -186,13 +168,34 @@ module Weird2NBE where
           σ (inj₁ refl) = rename* inj₁ v
           σ (inj₂ y) = rename* inj₂ (ρ y)
   den (app M N) {Y} ρ = rename* (dedup Y) (den M ρ (den N ρ))
-  -- den (app M N) {Y} ρ = {!!}
 
   id* : ∀ {X} -> [ X ⊢* X ]
   id* x = reflect _ (var x)
 
   normalize : ∀{X a} -> X ⊢ a -> X ⇐ a
   normalize M = reify _ (den M id*)
+
+
+-- module BrokenWeirdNBE where
+--   [_⊢_] : Cx -> Type -> Set1
+--   [ X ⊢ base ] = Lift (X ⇒ base)
+--   [ X ⊢ a ⊃ b ] = ∀ {Y} (s : X ⊆ Y) -> [ Y ⊢ a ] -> [ Y ⊢ b ]
+
+--   reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
+--   reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
+--   reify base (lift x) = neu x
+--   reify (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
+--   reflect base R = lift R
+--   reflect (a ⊃ b) R X⊆Y x = reflect b (app (rename⇒ X⊆Y R) (reify a x))
+
+--   Lam : ∀{X a b} -> [ a ∷ X ⊢ b ] -> [ X ⊢ a ⊃ b ]
+--   Lam body s x = {!reify _ body!}
+
+--   den : ∀{X a} -> X ⊢ a -> [ X ⊢ a ]
+--   den (var v) = reflect _ (var v)
+--   -- den (lam M) X⊆Y x = {!reify _ (den M)!}
+--   den (lam M) = Lam (den M)
+--   den (app M N) = den M id (den N)
 
 
 ---------- Normalisation by evaluation ----------
