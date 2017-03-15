@@ -126,7 +126,7 @@ module Semantics {i} (Base : Set i) where
 -- http://homepages.inf.ed.ac.uk/slindley/nbe/nbe-cambridge2016.pdf
 --
 -- Adapted to handle terms with explicitly typed contexts (Sam's slides only
--- consider "open" terms with unspecified environments). It was a pain in the
+-- consider "open" terms with unspecified environments). This was a pain in the
 -- ass to figure out.
 
 module ContextNBE where
