@@ -145,22 +145,19 @@ module ContextNBE where
   rename* : ∀{X Y} (s : X ⊆ Y) {a} -> [ X ⊢ a ] -> [ Y ⊢ a ]
   rename* s {base} (lift x) = lift (rename⇒ s x)
   rename* {X} s {a ⊃ b} f {Z} x = rename* (∪/⊆ Z X s) {b} (f x)
-  -- rename* {X} X⊆Y {a ⊃ b} f {Z} Y⊆Z x = f (Y⊆Z ∘ X⊆Y) x
 
   reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
   reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
   reify base (lift x) = neu x
   reify {X} (a ⊃ b) f = lam (reify b (f (reflect a (var refl))))
-  -- reify {X} (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
   reflect base R = lift R
   reflect (a ⊃ b) R x = reflect b (app (rename⇒ inj₂ R) (rename⇐ inj₁ (reify a x)))
-  -- reflect (a ⊃ b) R X⊆Y x = reflect b (app (rename⇒ X⊆Y R) (reify a x))
 
   -- Environments, or semantic substitutions
   [_⊢*_] : Cx -> Cx -> Set1
   [ X ⊢* Y ] = ∀{a} -> a ∈ Y -> [ X ⊢ a ]
 
-  -- We use this weird-ass denotation. 
+  -- We use this weird-ass denotation.
   den : ∀{X a} -> X ⊢ a -> ∀ {Y} -> [ Y ⊢* X ] -> [ Y ⊢ a ]
   den (var x) ρ = ρ x
   den (lam M) ρ v = den M σ
@@ -174,28 +171,6 @@ module ContextNBE where
 
   normalize : ∀{X a} -> X ⊢ a -> X ⇐ a
   normalize M = reify _ (den M id*)
-
-
--- module BrokenWeirdNBE where
---   [_⊢_] : Cx -> Type -> Set1
---   [ X ⊢ base ] = Lift (X ⇒ base)
---   [ X ⊢ a ⊃ b ] = ∀ {Y} (s : X ⊆ Y) -> [ Y ⊢ a ] -> [ Y ⊢ b ]
-
---   reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
---   reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
---   reify base (lift x) = neu x
---   reify (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
---   reflect base R = lift R
---   reflect (a ⊃ b) R X⊆Y x = reflect b (app (rename⇒ X⊆Y R) (reify a x))
-
---   Lam : ∀{X a b} -> [ a ∷ X ⊢ b ] -> [ X ⊢ a ⊃ b ]
---   Lam body s x = {!reify _ body!}
-
---   den : ∀{X a} -> X ⊢ a -> [ X ⊢ a ]
---   den (var v) = reflect _ (var v)
---   -- den (lam M) X⊆Y x = {!reify _ (den M)!}
---   den (lam M) = Lam (den M)
---   den (app M N) = den M id (den N)
 
 
 ---------- Normalisation by evaluation ----------
