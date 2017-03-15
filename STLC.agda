@@ -15,6 +15,11 @@ data Type : Set where
   base : Type -> Type
   _⊃_ : Type -> Type -> Type
 
+-- Proof that the existence of any type produces absurdity.
+¬Type : Type -> ⊥
+¬Type (base a) = ¬Type a
+¬Type (a ⊃ b) = ¬Type a
+
 
 ---------- Contexts ----------
 Cx : Set1
