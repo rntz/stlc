@@ -8,17 +8,10 @@ open import Data.Sum hiding (map)
 open import Function
 open import Relation.Binary.PropositionalEquality hiding ([_])
 
--- UH OH
--- problem: Type is uninhabitable, because it has no base case!
 infixr 6 _⊃_
 data Type : Set where
-  base : Type -> Type
+  base : Type
   _⊃_ : Type -> Type -> Type
-
--- Proof that the existence of any type produces absurdity.
-¬Type : Type -> ⊥
-¬Type (base a) = ¬Type a
-¬Type (a ⊃ b) = ¬Type a
 
 
 ---------- Contexts ----------
@@ -78,7 +71,7 @@ mutual
     -- allowed neutral terms at any type, we'd be β-short (no reducible
     -- expressions), but not η-long: that is, a term of type A -> B (in a
     -- nonempty context) might not be a lambda.
-    neu : ∀{a} (R : X ⇒ base a) -> X ⇐ base a
+    neu : (R : X ⇒ base) -> X ⇐ base
 
   data _⇒_ (X : Cx) : Type -> Set where
     var : ∀{a} -> a ∈ X -> X ⇒ a
@@ -125,14 +118,14 @@ rename⇒ r (app R M) = app (rename⇒ r R) (rename⇐ r M)
 -- HOLY SHIT IT WORKS
 module ReifySimple where
   [_⊢_] : Cx -> Type -> Set1
-  [ X ⊢ base a ] = Lift (X ⇒ base a)
+  [ X ⊢ base ] = Lift (X ⇒ base)
   [ X ⊢ a ⊃ b ] = ∀ {Y} -> X ⊆ Y -> [ Y ⊢ a ] -> [ Y ⊢ b ]
 
   reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
   reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
-  reify (base a) (lift x) = neu x
+  reify base (lift x) = neu x
   reify (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
-  reflect (base a) R = lift R
+  reflect base R = lift R
   reflect (a ⊃ b) R X⊆Y x = reflect b (app (rename⇒ X⊆Y R) (reify a x))
 
 -- 
