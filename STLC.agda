@@ -68,6 +68,21 @@ rename⊢ {X} f (lam M) = lam (rename⊢ (∷/⊆ X f) M)
 rename⊢ f (app M N) = app (rename⊢ f M) (rename⊢ f N)
 
 
+---------- Substitutions on terms ----------
+infix 1 _⊢*_
+_⊢*_ : Cx -> Cx -> Set
+X ⊢* Y = ∀ {a} -> a ∈ Y -> X ⊢ a
+
+∷/⊢* : ∀{X Y} -> X ⊢* Y -> ∀ {a} -> a ∷ X ⊢* a ∷ Y
+∷/⊢* σ here = var here
+∷/⊢* σ (next x) = rename⊢ next (σ x)
+
+sub⊢ : ∀{X Y a} -> Y ⊢* X -> X ⊢ a -> Y ⊢ a
+sub⊢ σ (var x) = σ x
+sub⊢ σ (lam M) = lam (sub⊢ (∷/⊢* σ) M)
+sub⊢ σ (app M N) = app (sub⊢ σ M) (sub⊢ σ N)
+
+
 ---------- Normal and neutral terms ----------
 infix 1 _⇐_ _⇒_
 mutual
