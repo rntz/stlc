@@ -15,8 +15,14 @@ open import Relation.Binary.PropositionalEquality hiding ([_])
 
 open import STLC
 
+-- 2017-12-23: Is there an intuition for what this means?
+-- [ X ⊢ a ] is a kind of "semantic" version of (X ⊢ a)
+-- can I understand NBE w.r.t hereditary substitution?
 [_⊢_] : Cx -> Type -> Set1
+-- a semantic term of base type is a normal term of base type.
 [ X ⊢ base ] = Lift (X ⇒ base)
+-- a semantic term of function type (a ⊃ b) is a map from semantic terms of type
+-- a to semantic terms of type b.
 [ X ⊢ a ⊃ b ] = ∀ {Y} -> [ Y ⊢ a ] -> [ Y ∪ X ⊢ b ]
 
 -- An alternative definition would be:
@@ -47,8 +53,8 @@ den : ∀{X a} -> X ⊢ a -> ∀ {Y} -> [ Y ⊢* X ] -> [ Y ⊢ a ]
 den (var x) ρ = ρ x
 den (lam M) ρ v = den M σ
   where σ : [ _ ∪ _ ⊢* _ ∷ _ ]
-        σ (inj₁ refl) = rename* inj₁ v
-        σ (inj₂ y) = rename* inj₂ (ρ y)
+        σ here = rename* inj₁ v
+        σ (next x) = rename* inj₂ (ρ x)
 den (app M N) {Y} ρ = rename* (dedup Y) (den M ρ (den N ρ))
 
 id* : ∀ {X} -> [ X ⊢* X ]

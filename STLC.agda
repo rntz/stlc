@@ -77,23 +77,39 @@ X ⊢* Y = ∀ {a} -> a ∈ Y -> X ⊢ a
 ∷/⊢* σ here = var here
 ∷/⊢* σ (next x) = rename⊢ next (σ x)
 
+cons⊢* : ∀{X a} -> X ⊢ a -> X ⊢* a ∷ X
+cons⊢* M here = M
+cons⊢* M (next x) = var x
+
+∅⊢*∅ : ∅ ⊢* ∅
+∅⊢*∅ ()
+
 sub⊢ : ∀{X Y a} -> Y ⊢* X -> X ⊢ a -> Y ⊢ a
 sub⊢ σ (var x) = σ x
 sub⊢ σ (lam M) = lam (sub⊢ (∷/⊢* σ) M)
 sub⊢ σ (app M N) = app (sub⊢ σ M) (sub⊢ σ N)
 
+-- sub⊢-is-id-on-closed-terms : ∀{a} (M : ∅ ⊢ a) {s : ∅ ⊢* ∅} -> sub⊢ s M ≡ M
+-- sub⊢-is-id-on-closed-terms (var ())
+-- sub⊢-is-id-on-closed-terms (app M N) =
+--   cong₂ app (sub⊢-is-id-on-closed-terms M) (sub⊢-is-id-on-closed-terms N)
+-- -- argh. induction.
+-- sub⊢-is-id-on-closed-terms (lam M) = {!!}
+
 
 ---------- Normal and neutral terms ----------
 infix 1 _⇐_ _⇒_
 mutual
+  -- Normal/canonical/checking terms.
   data _⇐_ (X : Cx) : Type -> Set where
     lam : ∀{a b} (M : a ∷ X ⇐ b) -> X ⇐ a ⊃ b
     -- allowing neutral terms only at base type enforces η-longness. if we
     -- allowed neutral terms at any type, we'd be β-short (no reducible
-    -- expressions), but not η-long: that is, a term of type A -> B (in a
-    -- nonempty context) might not be a lambda.
+    -- expressions), but not η-long: that is, an (open) term of type A ⊃ B might
+    -- not be a lambda.
     neu : (R : X ⇒ base) -> X ⇐ base
 
+  -- Neutral/atomic/synthesizing terms.
   data _⇒_ (X : Cx) : Type -> Set where
     var : ∀{a} -> a ∈ X -> X ⇒ a
     app : ∀{a b} (R : X ⇒ a ⊃ b) (M : X ⇐ a) -> X ⇒ b
@@ -137,6 +153,8 @@ module Semantics {i} (Base : Set i) where
 
 
 -- Reify & reflect, parameterized over a given semantics
+-- 2017-12-23: does this differ from what's in NBE.agda?
+-- why do I have both of them?
 record ReifySem i : Set (lsuc i) where
   field
     [_⊢_] : Cx -> Type -> Set i
