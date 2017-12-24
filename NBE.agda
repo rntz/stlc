@@ -5,14 +5,11 @@ module NBE where
 -- http://homepages.inf.ed.ac.uk/slindley/nbe/nbe-cambridge2016.pdf
 --
 -- Adapted to handle terms with explicitly typed contexts (Sam's slides only
--- consider "open" terms with unspecified environments). This was a pain in the
--- ass to figure out.
+-- consider open terms with the environments left implicit/untyped). This was a
+-- pain in the ass to figure out.
 
-open import Level renaming (zero to lzero; suc to lsuc)
-
+open import Level
 open import Function using (id; _∘_)
-open import Data.Sum hiding (map)
-open import Relation.Binary.PropositionalEquality hiding ([_])
 
 open import STLC
 
@@ -52,15 +49,19 @@ extend : ∀{X Y a} -> [ Y ⊢* X ] -> [ Y ⊢ a ] -> [ Y ⊢* a ∷ X ]
 extend ρ x here = x
 extend ρ x (next v) = ρ v
 
--- We use this weird-ass denotation.
--- This reminds me of hereditary substitution somehow.
-den : ∀{X a} -> X ⊢ a -> ∀ {Y} -> [ Y ⊢* X ] -> [ Y ⊢ a ]
-den (var x) ρ = ρ x
-den (lam M) ρ s = den M ∘ extend (rename s ∘ ρ)
-den (app M N) ρ = den M ρ id (den N ρ)
-
 id* : ∀ {X} -> [ X ⊢* X ]
 id* = reflect ∘ var
+
+-- We define a slightly strange "denotation" for open terms: Rather than going
+-- straight to semantic terms, they take a semantic substitution!
+--
+-- I'm still not entirely sure if this is necessary, but it's simple to define,
+-- and I haven't found a simple alternative. The obvious approach makes the
+-- `lam` case difficult; it wants a substitution lemma for semantic terms.
+den : ∀{X a} -> X ⊢ a -> ∀ {Y} -> [ Y ⊢* X ] -> [ Y ⊢ a ]
+den (var x) ρ = ρ x
+den (lam M) ρ s x = den M (extend (rename s ∘ ρ) x)
+den (app M N) ρ = den M ρ id (den N ρ)
 
 normalize : ∀{X a} -> X ⊢ a -> X ⇐ a
 normalize M = reify (den M id*)

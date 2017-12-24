@@ -1,7 +1,6 @@
 module STLC where
 
-open import Level renaming (zero to lzero; suc to lsuc)
-
+open import Level
 open import Data.Empty
 open import Data.Sum hiding (map)
 open import Function using (id; _∘_)
@@ -17,12 +16,12 @@ data Type : Set where
 Cx : Set1
 Cx = Type -> Set
 
-∅ : Cx
-∅ _ = ⊥
-
 infix 4 _∈_
 _∈_ : Type -> Cx -> Set
 a ∈ X = X a
+
+∅ : Cx
+∅ _ = ⊥
 
 hyp : Type -> Cx
 hyp = _≡_
