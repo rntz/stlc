@@ -10,6 +10,7 @@ module NBE where
 
 open import Level renaming (zero to lzero; suc to lsuc)
 
+open import Function using (id; _∘_)
 open import Data.Sum hiding (map)
 open import Relation.Binary.PropositionalEquality hiding ([_])
 
@@ -22,40 +23,40 @@ open import STLC
 -- a semantic term of base type is a normal term of base type.
 [ X ⊢ base ] = Lift (X ⇒ base)
 -- a semantic term of function type (a ⊃ b) is a map from semantic terms of type
--- a to semantic terms of type b.
-[ X ⊢ a ⊃ b ] = ∀ {Y} -> [ Y ⊢ a ] -> [ Y ∪ X ⊢ b ]
+-- a to semantic terms of type b. It also takes a renaming, to tell it what free
+-- variables in its argument and in itself coincide.
+[ X ⊢ a ⊃ b ] = ∀ {Y} (s : X ⊆ Y) -> [ Y ⊢ a ] -> [ Y ⊢ b ]
 
 -- An alternative definition would be:
 --
---     [ X ⊢ a ⊃ b ] = ∀ {Y} (s : X ⊆ Y) -> [ Y ⊢ a ] -> [ Y ⊢ b ]
+--     [ X ⊢ a ⊃ b ] = ∀ {Y} -> [ Y ⊢ a ] -> [ Y ∪ X ⊢ b ]
 --
--- I prefer the one with ∪ because it's more precise about what the function
--- does to variable bindings. I'm not sure if there's any principled reason to
--- prefer one to the other.
+-- I tried that first, but it makes the code more complex.
 
 rename* : ∀{X Y} (s : X ⊆ Y) {a} -> [ X ⊢ a ] -> [ Y ⊢ a ]
 rename* s {base} (lift x) = lift (rename⇒ s x)
-rename* {X} s {a ⊃ b} f {Z} x = rename* (∪/⊆ Z X s) {b} (f x)
+rename* s {a ⊃ b} f t = f (t ∘ s)
 
 reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
 reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
 reify base (lift x) = neu x
-reify {X} (a ⊃ b) f = lam (reify b (f (reflect a (var refl))))
+reify (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
 reflect base R = lift R
-reflect (a ⊃ b) R x = reflect b (app (rename⇒ inj₂ R) (rename⇐ inj₁ (reify a x)))
+reflect (a ⊃ b) R s x = reflect b (app (rename⇒ s R) (reify a x))
 
 -- Environments, or semantic substitutions
 [_⊢*_] : Cx -> Cx -> Set1
 [ X ⊢* Y ] = ∀{a} -> a ∈ Y -> [ X ⊢ a ]
 
 -- We use this weird-ass denotation.
+-- This reminds me of hereditary substitution somehow.
 den : ∀{X a} -> X ⊢ a -> ∀ {Y} -> [ Y ⊢* X ] -> [ Y ⊢ a ]
 den (var x) ρ = ρ x
-den (lam M) ρ v = den M σ
-  where σ : [ _ ∪ _ ⊢* _ ∷ _ ]
-        σ here = rename* inj₁ v
-        σ (next x) = rename* inj₂ (ρ x)
-den (app M N) {Y} ρ = rename* (dedup Y) (den M ρ (den N ρ))
+den (lam M) ρ s x = den M σ
+  where σ : [ _ ⊢* _ ∷ _ ]
+        σ here = x
+        σ (next v) = rename* s (ρ v)
+den (app M N) ρ = den M ρ id (den N ρ)
 
 id* : ∀ {X} -> [ X ⊢* X ]
 id* x = reflect _ (var x)
