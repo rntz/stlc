@@ -29,7 +29,7 @@ data Type : Set where
 Cx : Set1
 Cx = Type -> Set
 
--- For readability's sake, I use (a ∈ X) for the set of variables of type X.
+-- For readability, a ∈ X is the set of variables of type a in the context X.
 infix 4 _∈_
 _∈_ : Type -> Cx -> Set
 a ∈ X = X a
