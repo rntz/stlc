@@ -150,23 +150,3 @@ module Semantics {i} (Base : Set i) where
   den (var x) ρ = ρ x
   den {X} (lam M) ρ v = den M (extend {X} v ρ)
   den (app M N) ρ = den M ρ (den N ρ)
-
-
--- Reify & reflect, parameterized over a given semantics
--- 2017-12-23: does this differ from what's in NBE.agda?
--- why do I have both of them?
-record ReifySem i : Set (lsuc i) where
-  field
-    [_⊢_] : Cx -> Type -> Set i
-    weaken : ∀{X a c} -> [ X ⊢ c ] -> [ a ∷ X ⊢ c ]
-    baseI : ∀{X} -> X ⇒ base -> [ X ⊢ base ]
-    baseE : ∀{X} -> [ X ⊢ base ] -> X ⇒ base
-    ⊃I : ∀{X a b} -> (∀ {Y} -> X ⊆ Y -> [ Y ⊢ a ] -> [ Y ⊢ b ]) -> [ X ⊢ a ⊃ b ]
-    ⊃E : ∀{X a b} -> [ X ⊢ a ⊃ b ] -> [ X ⊢ a ] -> [ X ⊢ b ]
-
-  reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
-  reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
-  reify base x = neu (baseE x)
-  reify {X} (a ⊃ b) f = lam (reify b (⊃E (weaken {c = a ⊃ b} f) (reflect a (var here))))
-  reflect base R = baseI R
-  reflect (a ⊃ b) R = ⊃I (λ X⊆Y x -> reflect b (app (rename⇒ X⊆Y R) (reify a x)))

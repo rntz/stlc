@@ -33,33 +33,34 @@ open import STLC
 --
 -- I tried that first, but it makes the code more complex.
 
-rename* : ∀{X Y} (s : X ⊆ Y) {a} -> [ X ⊢ a ] -> [ Y ⊢ a ]
-rename* s {base} (lift x) = lift (rename⇒ s x)
-rename* s {a ⊃ b} f t = f (t ∘ s)
+rename : ∀{X Y} (s : X ⊆ Y) {a} -> [ X ⊢ a ] -> [ Y ⊢ a ]
+rename s {base} (lift x) = lift (rename⇒ s x)
+rename s {a ⊃ b} f t = f (t ∘ s)
 
-reify : ∀ {X} a -> [ X ⊢ a ] -> X ⇐ a
-reflect : ∀ {X} a -> X ⇒ a -> [ X ⊢ a ]
-reify base (lift x) = neu x
-reify (a ⊃ b) f = lam (reify b (f next (reflect a (var here))))
-reflect base R = lift R
-reflect (a ⊃ b) R s x = reflect b (app (rename⇒ s R) (reify a x))
+reify   : ∀{a X} -> [ X ⊢ a ] -> X ⇐ a
+reflect : ∀{a X} -> X ⇒ a -> [ X ⊢ a ]
+reify   {base}      = neu ∘ lower
+reify   {a ⊃ b} f   = lam (reify (f next (reflect (var here))))
+reflect {base}      = lift
+reflect {a ⊃ b} R s = reflect ∘ app (rename⇒ s R) ∘ reify
 
--- Environments, or semantic substitutions
+-- Environments, or semantic substitutions.
 [_⊢*_] : Cx -> Cx -> Set1
 [ X ⊢* Y ] = ∀{a} -> a ∈ Y -> [ X ⊢ a ]
+
+extend : ∀{X Y a} -> [ Y ⊢* X ] -> [ Y ⊢ a ] -> [ Y ⊢* a ∷ X ]
+extend ρ x here = x
+extend ρ x (next v) = ρ v
 
 -- We use this weird-ass denotation.
 -- This reminds me of hereditary substitution somehow.
 den : ∀{X a} -> X ⊢ a -> ∀ {Y} -> [ Y ⊢* X ] -> [ Y ⊢ a ]
 den (var x) ρ = ρ x
-den (lam M) ρ s x = den M σ
-  where σ : [ _ ⊢* _ ∷ _ ]
-        σ here = x
-        σ (next v) = rename* s (ρ v)
+den (lam M) ρ s = den M ∘ extend (rename s ∘ ρ)
 den (app M N) ρ = den M ρ id (den N ρ)
 
 id* : ∀ {X} -> [ X ⊢* X ]
-id* x = reflect _ (var x)
+id* = reflect ∘ var
 
 normalize : ∀{X a} -> X ⊢ a -> X ⇐ a
-normalize M = reify _ (den M id*)
+normalize M = reify (den M id*)
