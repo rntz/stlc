@@ -76,17 +76,17 @@ X ⊢* Y = ∀ {a} -> a ∈ Y -> X ⊢ a
 ∷/⊢* σ here = var here
 ∷/⊢* σ (next x) = rename⊢ next (σ x)
 
+sub⊢ : ∀{X Y a} -> Y ⊢* X -> X ⊢ a -> Y ⊢ a
+sub⊢ σ (var x) = σ x
+sub⊢ σ (lam M) = lam (sub⊢ (∷/⊢* σ) M)
+sub⊢ σ (app M N) = app (sub⊢ σ M) (sub⊢ σ N)
+
 cons⊢* : ∀{X a} -> X ⊢ a -> X ⊢* a ∷ X
 cons⊢* M here = M
 cons⊢* M (next x) = var x
 
 ∅⊢*∅ : ∅ ⊢* ∅
 ∅⊢*∅ ()
-
-sub⊢ : ∀{X Y a} -> Y ⊢* X -> X ⊢ a -> Y ⊢ a
-sub⊢ σ (var x) = σ x
-sub⊢ σ (lam M) = lam (sub⊢ (∷/⊢* σ) M)
-sub⊢ σ (app M N) = app (sub⊢ σ M) (sub⊢ σ N)
 
 -- sub⊢-is-id-on-closed-terms : ∀{a} (M : ∅ ⊢ a) {s : ∅ ⊢* ∅} -> sub⊢ s M ≡ M
 -- sub⊢-is-id-on-closed-terms (var ())
