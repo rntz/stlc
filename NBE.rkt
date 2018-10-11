@@ -55,3 +55,21 @@
 (define/contract (norm M)
   (-> term? nf?)
   (reify (den M (hash))))
+
+(define Y '(lambda (f) ((lambda (x) (f (x x))) (lambda (x) (f (x x))))))
+
+(define Z
+  '(lambda (f) ((lambda (x) (f (lambda (w) ((x x) w))))
+           (lambda (x) (f (lambda (w) ((x x) w)))))))
+
+(define simpler-Z
+  '(lambda (f)
+     ((lambda (x) (x x))
+      (lambda (s) (f (lambda (w) ((s s) w)))))))
+
+(define weird
+  '(lambda (f)
+     ((lambda (x) (x x))
+      (lambda (s) (lambda (x) ((f (s s)) x))))))
+
+;; (norm '((lambda (x) (x x)) (lambda (s) (lambda (f) (f ((s s) f))))))
