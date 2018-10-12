@@ -117,27 +117,6 @@
 ;; implementation.
 
 
-;; ========== λ-CALCULUS SYNTAX ==========
-;; TODO: explain this
-(define name? (and/c symbol? (not/c 'lambda)))
-;; TODO: explain this
-(define-flat-contract term?
-  name?
-  (list/c 'lambda (list/c name?) term?)
-  (list/c term? term?))
-
-;; Terms w/ deBruijn levels for variables, annotated with their NFVs.
-;; TODO: explain this
-(define-flat-contract ann-term?
-  (list/c (or/c natural? #f)
-          (or/c natural?
-                (list/c 'lambda ann-term?)
-                (list/c ann-term? ann-term?))))
-
-;; TODO: explain this
-(define cx? (hash/c name? natural? #:immutable #t))
-
-
 ;; ========== THE CORE ALGORITHM ==========
 
 ;; The definition of minimal deBruijn levels uses the free variables of each
@@ -175,17 +154,38 @@
 ;; TODO: explain why we only need nfv(). Can we reformulate mdb() in terms of
 ;; nfv()?
 
+;; λ-calculus terms are given by this grammar:
+;;
+;;     M, N ::= x | (lambda (x) M) | (M N)
+;;
+;; This is very easy to encode as a Racket contract.
+(define-flat-contract term?
+  symbol?
+  (list/c 'lambda (list/c symbol?) term?)
+  (list/c term? term?))
+
+;; As mentioned, we first compute the nfv for each subterm. We represent this
+;; using an "annotated term" where:
+;; 1. Every subterm comes with an nfv.
+;; 2. All variables are replaced by natural numbers (deBruijn levels).
+(define-flat-contract ann-term?
+  (list/c (or/c natural? #f)
+          (or/c natural?
+                (list/c 'lambda ann-term?)
+                (list/c ann-term? ann-term?))))
+
 ;; Given a subterm, its depth (number of binders it is under), and a context
 ;; mapping free variables to their deBruijn levels, produces the free varaible
 ;; heap and version of the subterm where every node is annotated with its nfv
 ;; and all variables replaced by their deBruijn levels.
 (define/contract (compute-nfvs term depth cx)
-  (-> term? natural? cx? (values heap? ann-term?))
+  (-> term? natural? (hash/c symbol? natural? #:immutable #t)
+      (values heap? ann-term?))
   ;; Invariant check.
   (unless (= depth (+ 1 (apply max -1 (hash-values cx))))
     (error 'compute-nfvs "oops ~a ~a" depth cx))
   (match term
-    [(? name? x)
+    [(? symbol? x)
      (define n (hash-ref cx x))
      (values (heap-singleton n) (list n n))]
     [`(lambda (,x) ,body)
@@ -201,11 +201,6 @@
      (define-values (aheap ax) (compute-nfvs a depth cx))
      (define heap (heap-union fheap aheap))
      (values heap `(,(heap-max heap) (,fx ,ax)))]))
-
-;; Annotates a closed term with nfvs for each subterm.
-(define (annotate term)
-  (define-values (_ x) (compute-nfvs term 0 (hash)))
-  x)
 
 ;; Now that we have an term annotated with nfvs, we can rename it in such a way
 ;; that subterms N1, N2 that are contextually α-equivalent become syntactically
@@ -225,6 +220,9 @@
      ;;
      ;; TODO: Hold on, isn't this wrong? I don't want to use the nfv, I want to
      ;; use its minimal deBruijn level! Can I construct a counterexample?
+     ;;
+     ;; Thus far I have been unable to find a counterexample. I am not sure
+     ;; whether I think they exist or not.
      (define x (and (eqv? depth body-nfv) ;; is the variable used in the body?
                     (nat->symbol (+ 1 (or nfv -1)))))
      `(lambda (,(or x '_))
@@ -233,6 +231,13 @@
      `(,(deannotate f depth cx)
        ,(deannotate a depth cx))]))
 
+;; Annotates a closed term with nfvs for each subterm.
+(define (annotate term)
+  (define-values (_ x) (compute-nfvs term 0 (hash)))
+  x)
+
+;; Renames a term so that two contextually α-equivalent subterms become
+;; syntactically equal.
 (define (rename term) (deannotate (annotate term)))
 
 
