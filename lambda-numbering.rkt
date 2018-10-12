@@ -54,16 +54,9 @@
 ;; 2. For subterms N1, N2 of M, if N1 ≡α N2 (contextually), their renamings will be
 ;;    syntactically equal.
 
-;; TODO:
-;; - simplify the nfv/ann-term->term code.
-;;   - is there a better way to store the nfv for each term?
-;;   - is it possible to fuse these passes somehow?
-;;     maybe something NBE/HOAS style?
-
 #lang racket
 
 (require syntax/parse/define)
-(define-syntax-parser TODO [_ #'(error "TODO")])
 (define-syntax-rule (define-flat-contract name branch ...)
   (define name (flat-rec-contract name branch ...)))
 
@@ -71,11 +64,9 @@
 ;; ========== PAIRING HEAPS ==========
 ;;
 ;; I find a renaming in O(n log n) time, where n is the size of M. To do this, I
-;; need a priority queue data structure where findMax, deleteMax, and union each
-;; take amortized O(log n) time.
-;;
-;; I use pairing heaps. They are remarkably simple to implement, with very nice
-;; time bounds (whose proofs I do not yet understand):
+;; need a priority queue structure where findMax, deleteMax, and union each take
+;; amortized O(log n) time. I use pairing heaps. They are remarkably simple to
+;; implement, with very nice time bounds (whose proofs I do not yet understand):
 ;;
 ;; insert     O(1)     amortized & worst-case
 ;; union      O(1)     amortized & worst-case
@@ -83,11 +74,11 @@
 ;; deleteMax  O(log n) amortized, O(n) worst-case
 ;;
 ;; For details consult Wikipedia or the Monad Reader, issue 16.
-;; https://en.m.wikipedia.org/wiki/Pairing_heap
+;; https://en.wikipedia.org/wiki/Pairing_heap
 ;; https://themonadreader.files.wordpress.com/2010/05/issue16.pdf
 ;;
-;; I've implemented a small variation which automatically eliminates duplicate
-;; entries. I hope and conjecture, but have NOT proven, that this has the same
+;; I've implemented a small variation that automatically eliminates duplicate
+;; entries. I hope and conjecture, but have not proven, that this has the same
 ;; amortized time bounds.
 
 ;; A heap is either empty or a node.
@@ -152,11 +143,12 @@
 ;; The definition of minimal deBruijn levels uses the free variables of each
 ;; subterm. However, computing the free variable set for every subterm seems
 ;; prohibitive: in the worst case, O(n) subterms might each have O(n) free
-;; variables, using O(n^2) space. Possibly structural sharing would save us from
-;; this quadratic hell, but there is another option.
+;; variables, using O(n^2) space!
 ;;
-;; If we're careful, we only need the "nearest free variable" of each subterm N:
-;; among the free variables of N, the one most recently bound. For example:
+;; Possibly structural sharing would save us from this quadratic hell, but there
+;; is another option. If we're careful, we only need the "nearest free variable"
+;; of each subterm N: among the free variables of N, the one most recently
+;; bound. For example:
 ;;
 ;;     λa.λb.λc.(λd. abd)
 ;;              ^---N---^
@@ -166,37 +158,63 @@
 ;;     fv(N) = {a,b}        because in N, d is bound and c doesn't occur
 ;;     nfv(N) = b           because b is bound more recently than a
 ;;
-(define/contract (nfv term depth cx)
+;; We can compute the nfv for each subterm by keeping a heap of free variables,
+;; where "nearer" variables (with smaller scopes) have higher priority.
+;; Concretely, we use their deBruijn levels. A variables' deBruijn level is the
+;; number of binders enclosing its binder. For example,
+;;
+;;     λx.x(λy.y)(λz.xz)  becomes  λ0.0(λ1.1)(λ1.01)
+;;
+;; NB. DeBruijn levels and indices are very different. With deBruijn levels, the
+;; same variable always has the same number; unlike deBruijn indices, where a
+;; variable occurrence gets a number that depends on the number of binders
+;; between the occurrence & its binder. On the other hand, with deBruijn levels,
+;; the subterm (λx.x) may become (λ0.0) or (λ1.1) or (λ2.2), etc. depending on
+;; where it occurs; with deBruijn indexes it is always (λ.0).
+;;
+;; TODO: explain why we only need nfv(). Can we reformulate mdb() in terms of
+;; nfv()?
+
+;; Given a subterm, its depth (number of binders it is under), and a context
+;; mapping free variables to their deBruijn levels, produces the free varaible
+;; heap and version of the subterm where every node is annotated with its nfv
+;; and all variables replaced by their deBruijn levels.
+(define/contract (compute-nfvs term depth cx)
   (-> term? natural? cx? (values heap? ann-term?))
-  ;; invariant check
+  ;; Invariant check.
   (unless (= depth (+ 1 (apply max -1 (hash-values cx))))
-    (error 'nfv "oops ~a ~a" depth cx))
+    (error 'compute-nfvs "oops ~a ~a" depth cx))
   (match term
     [(? name? x)
      (define n (hash-ref cx x))
      (values (heap-singleton n) (list n n))]
     [`(lambda (,x) ,body)
      (define-values (heap ann-body)
-       (nfv body (+ depth 1) (hash-set cx x depth)))
+       (compute-nfvs body (+ depth 1) (hash-set cx x depth)))
      ;; If body's NFV is x, drop it.
      (when (eq? depth (heap-max heap))
        ;; (printf "here ~a ~a\n" depth term)
        (set! heap (heap-drop heap)))
      (values heap `(,(heap-max heap) (lambda ,ann-body)))]
-    [`(,fnc ,arg)
-     (define-values (fheap fncx) (nfv fnc depth cx))
-     (define-values (aheap argx) (nfv arg depth cx))
+    [`(,f ,a)
+     (define-values (fheap fx) (compute-nfvs f depth cx))
+     (define-values (aheap ax) (compute-nfvs a depth cx))
      (define heap (heap-union fheap aheap))
-     (values heap `(,(heap-max heap) (,fncx ,argx)))]))
+     (values heap `(,(heap-max heap) (,fx ,ax)))]))
 
-(define (term->ann-term term [vars '()])
-  (define depth (length vars))
-  (define cx (for/hash ([x vars] [i (in-naturals)]) (values x i)))
-  (define-values (_ x) (nfv term depth cx))
+;; Annotates a closed term with nfvs for each subterm.
+(define (annotate term)
+  (define-values (_ x) (compute-nfvs term 0 (hash)))
   x)
 
-;; What do these extra parameters do? Are they useful to the outside world?
-(define/contract (ann-term->term ann-term [depth 0] [cx (hash)])
+;; Now that we have an term annotated with nfvs, we can rename it in such a way
+;; that subterms N1, N2 that are contextually α-equivalent become syntactically
+;; equal.
+
+;; Takes an nfv-annotated term, a depth (number of enclosing binders), and a
+;; context mapping variables (which will be (non-minimal) deBruijn levels) to
+;; their replacements.
+(define/contract (deannotate ann-term [depth 0] [cx (hash)])
   (-> ann-term? term?)
   (match-define `(,nfv ,term) ann-term)
   (match term
@@ -204,20 +222,23 @@
     [`(lambda ,(and body (list body-nfv _)))
      ;; If the lambda variable is used in the body, generate a new name for it
      ;; using the lowest variable index not already present in body.
-     (define x (and (eqv? depth body-nfv)
-                   (nat->symbol (+ 1 (or nfv -1)))))
+     ;;
+     ;; TODO: Hold on, isn't this wrong? I don't want to use the nfv, I want to
+     ;; use its minimal deBruijn level! Can I construct a counterexample?
+     (define x (and (eqv? depth body-nfv) ;; is the variable used in the body?
+                    (nat->symbol (+ 1 (or nfv -1)))))
      `(lambda (,(or x '_))
-        ,(ann-term->term body (+ 1 depth) (if x (hash-set cx depth x) cx)))]
-    [`(,fnc ,arg)
-     `(,(ann-term->term fnc depth cx)
-       ,(ann-term->term arg depth cx))]))
+        ,(deannotate body (+ 1 depth) (if x (hash-set cx depth x) cx)))]
+    [`(,f ,a)
+     `(,(deannotate f depth cx)
+       ,(deannotate a depth cx))]))
 
-(define (rename term) (ann-term->term (term->ann-term term)))
+(define (rename term) (deannotate (annotate term)))
 
 
 ;; ========== GENERATING VARIABLE NAMES ==========
 ;; Deterministically generating reasonable variable names given DeBruijn levels.
-;; This makes the output of ann-term->term much prettier.
+;; This makes the output of deannotate much prettier.
 (define chars "abcdefghijklmnopqrstuvwxyz")
 (define nchars (string-length chars))
 (define chartbl (for/hash ([i (in-naturals)] [c chars])
@@ -234,7 +255,7 @@
 ;; ========== TESTS ==========
 (module+ test
   (define example '(lambda (x) ((lambda (y) y) (lambda (z) (x z)))))
-  (define-values (hp aterm) (nfv example 0 (hash)))
+  (define-values (hp aterm) (compute-nfvs example 0 (hash)))
 
   (define example2 '(lambda (x)
                       ((lambda (y) x)
