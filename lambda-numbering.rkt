@@ -15,30 +15,30 @@
 ;; There is a clear sense in which N1 ≢α N2. The "y" in N1 and in N2 are
 ;; distinct variables that merely happen to share a name.
 ;;
-;; Normal α-equivalence is solved by deBruijn indexing. But not contextual
-;; α-equivalence. Under deBruijn indexing,
+;; Normal α-equivalence is solved by de Bruijn indexing. But not contextual
+;; α-equivalence. Under de Bruijn indexing,
 ;;
 ;;     λy.(λx.y)(λz.λx.y)  becomes  λ.(λ1)(λ(λ2))
 ;;        ^N1       ^N2                ^N1   ^N2
 ;;
 ;; Here, N1 ≡α N2 becomes λ1 ≠ λ2.
 ;;
-;; Instead, my approach uses what I call "minimal deBruijn levels". Reusing the
+;; Instead, my approach uses what I call "minimal de Bruijn levels". Reusing the
 ;; prior example,
 ;;
 ;;     λy.(λx.y)(λz.λx.y)  becomes  λa.(λ_.a)(λ_.λ_.a)
 ;;
 ;; where "_" is a dummy variable used when a bound variable is never referred to
-;; within its scope. So, what are minimal deBruijn levels?
+;; within its scope. So, what are minimal de Bruijn levels?
 ;;
 ;; Let fv(X) be the set of free variables of the term X. Fix a term M. Consider
-;; a subterm N = (λy.O) of M. Then the minimal deBruijn level mdb(y) of y is:
+;; a subterm N = (λy.O) of M. Then the minimal de Bruijn level mdb(y) of y is:
 ;;
 ;;     mdb(y) = 0                               if fv(N) = ∅
 ;;     mdb(y) = 1 + max {mdb(x) | x ∈ fv(N)}    otherwise
 ;;
-;; This seemingly recursive definition is inductive: the minimal deBruijn level
-;; of a binding depends only on the minimal deBruijn levels of bindings with
+;; This seemingly recursive definition is inductive: the minimal de Bruijn level
+;; of a binding depends only on the minimal de Bruijn levels of bindings with
 ;; strictly wider scopes.
 ;;
 ;; Now, fix an infinite sequence of distinct concrete variables xᵢ, and a
@@ -119,7 +119,7 @@
 
 ;; ========== THE CORE ALGORITHM ==========
 
-;; The definition of minimal deBruijn levels uses the free variables of each
+;; The definition of minimal de Bruijn levels uses the free variables of each
 ;; subterm. However, computing the free variable set for every subterm seems
 ;; prohibitive: in the worst case, O(n) subterms might each have O(n) free
 ;; variables, using O(n^2) space!
@@ -139,17 +139,17 @@
 ;;
 ;; We can compute the nfv for each subterm by keeping a heap of free variables,
 ;; where "nearer" variables (with smaller scopes) have higher priority.
-;; Concretely, we use their deBruijn levels. A variables' deBruijn level is the
-;; number of binders enclosing its binder. For example,
+;; Concretely, we use their de Bruijn levels. A variables' de Bruijn level is
+;; the number of binders enclosing its binder. For example,
 ;;
 ;;     λx.x(λy.y)(λz.xz)  becomes  λ0.0(λ1.1)(λ1.01)
 ;;
-;; NB. DeBruijn levels and indices are very different. With deBruijn levels, the
-;; same variable always has the same number; unlike deBruijn indices, where a
-;; variable occurrence gets a number that depends on the number of binders
-;; between the occurrence & its binder. On the other hand, with deBruijn levels,
-;; the subterm (λx.x) may become (λ0.0) or (λ1.1) or (λ2.2), etc. depending on
-;; where it occurs; with deBruijn indexes it is always (λ.0).
+;; NB. DeBruijn levels and indices are very different. With de Bruijn levels,
+;; the same variable always has the same number; unlike de Bruijn indices, where
+;; a variable occurrence gets a number that depends on the number of binders
+;; between the occurrence & its binder. On the other hand, with de Bruijn
+;; levels, the subterm (λx.x) may become (λ0.0) or (λ1.1) or (λ2.2), etc.
+;; depending on where it occurs; with de Bruijn indexes it is always (λ.0).
 ;;
 ;; TODO: explain why we only need nfv(). Can we reformulate mdb() in terms of
 ;; nfv()?
@@ -166,8 +166,8 @@
 
 ;; As mentioned, we first compute the nfv for each subterm. We represent this
 ;; using an "annotated term" where:
-;; 1. Every subterm comes with an nfv.
-;; 2. All variables are replaced by natural numbers (deBruijn levels).
+;; 1. Every subterm comes with an nfv (or #f, if it has no free variables).
+;; 2. All variables are replaced by natural numbers (de Bruijn levels).
 (define-flat-contract ann-term?
   (list/c (or/c natural? #f)
           (or/c natural?
@@ -175,9 +175,9 @@
                 (list/c ann-term? ann-term?))))
 
 ;; Given a subterm, its depth (number of binders it is under), and a context
-;; mapping free variables to their deBruijn levels, produces the free varaible
+;; mapping free variables to their de Bruijn levels, produces the free varaible
 ;; heap and version of the subterm where every node is annotated with its nfv
-;; and all variables replaced by their deBruijn levels.
+;; and all variables replaced by their de Bruijn levels.
 (define/contract (compute-nfvs term depth cx)
   (-> term? natural? (hash/c symbol? natural? #:immutable #t)
       (values heap? ann-term?))
@@ -207,7 +207,7 @@
 ;; equal.
 
 ;; Takes an nfv-annotated term, a depth (number of enclosing binders), and a
-;; context mapping variables (which will be (non-minimal) deBruijn levels) to
+;; context mapping variables (which will be (non-minimal) de Bruijn levels) to
 ;; their replacements.
 (define/contract (deannotate ann-term [depth 0] [cx (hash)])
   (-> ann-term? term?)
@@ -219,7 +219,7 @@
      ;; using the lowest variable index not already present in body.
      ;;
      ;; TODO: Hold on, isn't this wrong? I don't want to use the nfv, I want to
-     ;; use its minimal deBruijn level! Can I construct a counterexample?
+     ;; use its minimal de Bruijn level! Can I construct a counterexample?
      ;;
      ;; Thus far I have been unable to find a counterexample. I am not sure
      ;; whether I think they exist or not.
