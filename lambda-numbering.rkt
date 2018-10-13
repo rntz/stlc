@@ -175,7 +175,7 @@
                 (list/c ann-term? ann-term?))))
 
 ;; Given a subterm, its depth (number of binders it is under), and a context
-;; mapping free variables to their de Bruijn levels, produces the free varaible
+;; mapping free variables to their de Bruijn levels, produces the free variable
 ;; heap and version of the subterm where every node is annotated with its nfv
 ;; and all variables replaced by their de Bruijn levels.
 (define/contract (compute-nfvs term depth cx)
@@ -218,11 +218,13 @@
      ;; If the lambda variable is used in the body, generate a new name for it
      ;; using the lowest variable index not already present in body.
      ;;
-     ;; TODO: Hold on, isn't this wrong? I don't want to use the nfv, I want to
+     ;; FIXME: Hold on, isn't this wrong? I don't want to use the nfv, I want to
      ;; use its minimal de Bruijn level! Can I construct a counterexample?
      ;;
-     ;; Thus far I have been unable to find a counterexample. I am not sure
-     ;; whether I think they exist or not.
+     ;; YES: (lambda (a) (lambda (b) (lambda (c) (lambda (d) (b d)))))
+     ;; should get:  (lambda (_) (lambda (a) (lambda (_) (lambda (b) (a b)))))
+     ;; but instead: (lambda (_) (lambda (a) (lambda (_) (lambda (c) (a c)))))
+     ;; argh.
      (define x (and (eqv? depth body-nfv) ;; is the variable used in the body?
                     (nat->symbol (+ 1 (or nfv -1)))))
      `(lambda (,(or x '_))
@@ -273,4 +275,11 @@
   (define example4 '(lambda (x)
                       ((lambda (y) (y (lambda (z) (x z))))
                        (lambda (y) (lambda (z) (x z))))))
-  (rename example4))
+  (rename example4)
+
+  (rename '(lambda (a) (lambda (b) (lambda (c) (a c)))))
+
+  ;; FIXME: ah, shit, a counterexample!
+  ;; should get:  (lambda (_) (lambda (a) (lambda (_) (lambda (b) (a b)))))
+  ;; but instead: (lambda (_) (lambda (a) (lambda (_) (lambda (c) (a c)))))
+  (rename '(lambda (a) (lambda (b) (lambda (c) (lambda (d) (b d)))))))
