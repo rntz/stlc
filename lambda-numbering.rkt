@@ -152,7 +152,7 @@
 ;; depending on where it occurs; with de Bruijn indexes it is always (λ.0).
 ;;
 ;; TODO: explain why we only need nfv(). Can we reformulate mdb() in terms of
-;; nfv()?
+;; nfv()? Yes! mdb(y) = 1 + mdb(nfv(λy.O)) when fv(O) ≠ ∅.
 
 ;; λ-calculus terms are given by this grammar:
 ;;
@@ -207,28 +207,22 @@
 ;; equal.
 
 ;; Takes an nfv-annotated term, a depth (number of enclosing binders), and a
-;; context mapping variables (which will be (non-minimal) de Bruijn levels) to
-;; their replacements.
+;; context mapping variables (de Bruijn levels) to their replacements (minimal
+;; de Bruijn levels).
 (define/contract (deannotate ann-term [depth 0] [cx (hash)])
   (-> ann-term? term?)
   (match-define `(,nfv ,term) ann-term)
   (match term
-    [(? natural? n) (hash-ref cx n)]
+    [(? natural? n)
+     (nat->symbol (hash-ref cx n))]
     [`(lambda ,(and body (list body-nfv _)))
-     ;; If the lambda variable is used in the body, generate a new name for it
-     ;; using the lowest variable index not already present in body.
-     ;;
-     ;; FIXME: Hold on, isn't this wrong? I don't want to use the nfv, I want to
-     ;; use its minimal de Bruijn level! Can I construct a counterexample?
-     ;;
-     ;; YES: (lambda (a) (lambda (b) (lambda (c) (lambda (d) (b d)))))
-     ;; should get:  (lambda (_) (lambda (a) (lambda (_) (lambda (b) (a b)))))
-     ;; but instead: (lambda (_) (lambda (a) (lambda (_) (lambda (c) (a c)))))
-     ;; argh.
-     (define x (and (eqv? depth body-nfv) ;; is the variable used in the body?
-                    (nat->symbol (+ 1 (or nfv -1)))))
-     `(lambda (,(or x '_))
-        ,(deannotate body (+ 1 depth) (if x (hash-set cx depth x) cx)))]
+     ;; Compute the variable's mdb. Here we use the fact that mdb(y) = 1 +
+     ;; mdb(nfv(λy.O)) when fv(λy.O) ≠ ∅. TODO: justify this fact.
+     (define mdb (if nfv (+ 1 (hash-ref cx nfv)) 0))
+     ;; If the variable is used in the body, generate a name for it based on mdb.
+     (define x (if (eqv? depth body-nfv) (nat->symbol mdb) '_))
+     `(lambda (,x)
+        ,(deannotate body (+ 1 depth) (if mdb (hash-set cx depth mdb) cx)))]
     [`(,f ,a)
      `(,(deannotate f depth cx)
        ,(deannotate a depth cx))]))
@@ -260,26 +254,16 @@
 
 
 ;; ========== TESTS ==========
+;;
+;; TODO: make these actual tests which check equality or something.
+;;
+;; could I test this by randomly renaming things and checking that their
+;; renamings are equal?
 (module+ test
-  (define example '(lambda (x) ((lambda (y) y) (lambda (z) (x z)))))
-  (define-values (hp aterm) (compute-nfvs example 0 (hash)))
-
-  (define example2 '(lambda (x)
-                      ((lambda (y) x)
-                       (lambda (y) (lambda (z) x)))))
-  (rename example2)
-
-  (define example3 '((lambda (x) x) (lambda (y) (lambda (x) x))))
-  (rename example3)
-
-  (define example4 '(lambda (x)
-                      ((lambda (y) (y (lambda (z) (x z))))
-                       (lambda (y) (lambda (z) (x z))))))
-  (rename example4)
-
+  (rename '(lambda (x) ((lambda (y) y) (lambda (z) (x z)))))
+  (rename '(lambda (x) ((lambda (y) x) (lambda (y) (lambda (z) x)))))
+  (rename '((lambda (x) x) (lambda (y) (lambda (x) x))))
+  (rename '(lambda (x) ((lambda (y) (y (lambda (z) (x z))))
+                   (lambda (y) (lambda (z) (x z))))))
   (rename '(lambda (a) (lambda (b) (lambda (c) (a c)))))
-
-  ;; FIXME: ah, shit, a counterexample!
-  ;; should get:  (lambda (_) (lambda (a) (lambda (_) (lambda (b) (a b)))))
-  ;; but instead: (lambda (_) (lambda (a) (lambda (_) (lambda (c) (a c)))))
   (rename '(lambda (a) (lambda (b) (lambda (c) (lambda (d) (b d)))))))
