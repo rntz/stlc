@@ -9,8 +9,8 @@
 ;; between _subterms_ of a term M, rather than two terms. For example, typically
 ;; we'd say (λx.y ≡α λx.y). However, consider:
 ;;
-;;     let y = 1 in f = (λx.y) in let y = 2 in (λx.y)
-;;                      ^ N1 ^                 ^ N2 ^
+;;     let y = 1 in let f = (λx.y) in let y = 2 in (λx.y)
+;;                          ^ N1 ^                 ^ N2 ^
 ;;
 ;; There is a clear sense in which N1 ≢α N2. The "y" in N1 and in N2 are
 ;; distinct variables that merely happen to share a name.
