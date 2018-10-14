@@ -242,15 +242,14 @@
 ;; This makes the output of deannotate much prettier.
 (define chars "abcdefghijklmnopqrstuvwxyz")
 (define nchars (string-length chars))
-(define chartbl (for/hash ([i (in-naturals)] [c chars])
-                  (values i (string->symbol (string c)))))
 (define nametbl (make-weak-hasheqv)) ;; memo table.
-(define (nat->symbol d)
-  (define (make)
-    (define-values (lvl idx) (quotient/remainder d nchars))
-    (string->symbol
-     (format "~a~a" (hash-ref chartbl idx) (if (> lvl 0) lvl ""))))
-  (hash-ref! nametbl d make))
+(define (nat->symbol num)
+  (define (get-digits num digits)
+    (define-values (quo rem) (quotient/remainder num nchars))
+    (set! digits (cons (string-ref chars rem) digits))
+    (if (= quo 0) digits (get-digits (- quo 1) digits)))
+  (define (make-sym) (string->symbol (apply string (get-digits num '()))))
+  (hash-ref! nametbl num make-sym))
 
 
 ;; ========== TESTS ==========
