@@ -84,27 +84,36 @@
 ;; A heap is either empty or a node.
 ;; A node has a max element and a list of child nodes.
 (struct node (max kids) #:transparent)
-(define heap? (or/c null? node?))
+
+;; A heap invariant checker, disguised as a type predicate. Very slow; replace
+;; by (define heap? (or/c null? node?)) to go faster.
+(define (heap? h #:bound [bound #f])
+  (match h
+    [(node max (? (listof (and/c node? (curry heap? #:bound max))))) #t]
+    [h (null? h)]))
 
 (define (heap-singleton x) (node x '()))
 ;; Returns #f if the heap is empty.
 (define (heap-max x) (and (node? x) (node-max x)))
 ;; Drops the maximum element, if present.
-(define (heap-drop h)
+(define/contract (heap-drop h)
+  (-> heap? heap?)
   (if (null? h) h (heap-union* (node-kids h))))
 
-(define/match (heap-union a b)
-  [('() b) b]
-  [(a '()) a]
-  [((node x xs) (node y ys))
-   (cond
-     [(> x y) (node x (cons b xs))]
-     [(< x y) (node y (cons a ys))]
-     ;; This is the case I've added to avoid duplicates.
-     [(= x y)
-      (node x (match (heap-union* ys)
-                ['() xs]
-                [y (cons y xs)]))])])
+(define/contract (heap-union a b)
+  (-> heap? heap? heap?)
+  (match* (a b)
+    [('() b) b]
+    [(a '()) a]
+    [((node x xs) (node y ys))
+     (cond
+       [(> x y) (node x (cons b xs))]
+       [(< x y) (node y (cons a ys))]
+       ;; This is the case I've added to avoid duplicates.
+       [(= x y)
+        (node x (match (heap-union* ys)
+                  ['() xs]
+                  [y (cons y xs)]))])]))
 
 ;; Unions a list of heaps.
 (define/match (heap-union* l)
