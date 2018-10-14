@@ -262,16 +262,28 @@
 
 
 ;; ========== TESTS ==========
-;;
-;; TODO: make these actual tests which check equality or something.
-;;
-;; could I test this by randomly renaming things and checking that their
-;; renamings are equal?
 (module+ test
-  (rename '(lambda (x) ((lambda (y) y) (lambda (z) (x z)))))
-  (rename '(lambda (x) ((lambda (y) x) (lambda (y) (lambda (z) x)))))
-  (rename '((lambda (x) x) (lambda (y) (lambda (x) x))))
-  (rename '(lambda (x) ((lambda (y) (y (lambda (z) (x z))))
+  (require rackunit)
+
+  ;; Replaces every variable with a unique gensym.
+  (define (uniqify term [cx (hash)])
+    (match term
+      [(? symbol? x) (hash-ref cx x)]
+      [`(lambda (,x) ,body)
+       (define xnew (gensym x))
+       `(lambda (,xnew) ,(uniqify body (hash-set cx x xnew)))]
+      [`(,M ,N)
+       `(,(uniqify M cx) ,(uniqify N cx))]))
+
+  (define (check-term M)
+    (define newM (rename M))
+    (check-equal? newM (rename (uniqify M)))
+    newM)
+
+  (check-term '(lambda (x) ((lambda (y) y) (lambda (z) (x z)))))
+  (check-term '(lambda (x) ((lambda (y) x) (lambda (y) (lambda (z) x)))))
+  (check-term '((lambda (x) x) (lambda (y) (lambda (x) x))))
+  (check-term '(lambda (x) ((lambda (y) (y (lambda (z) (x z))))
                    (lambda (y) (lambda (z) (x z))))))
-  (rename '(lambda (a) (lambda (b) (lambda (c) (a c)))))
-  (rename '(lambda (a) (lambda (b) (lambda (c) (lambda (d) (b d)))))))
+  (check-term '(lambda (a) (lambda (b) (lambda (c) (a c)))))
+  (check-term '(lambda (a) (lambda (b) (lambda (c) (lambda (d) (b d)))))))
