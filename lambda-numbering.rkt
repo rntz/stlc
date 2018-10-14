@@ -275,6 +275,9 @@
       [`(,M ,N)
        `(,(uniqify M cx) ,(uniqify N cx))]))
 
+  ;; This tests, basically, that α-equivalent terms get renamed to equal terms.
+  ;; This is nice, but doesn't actually test the property we care most about:
+  ;; that contextually α-equivalent subterms get mapped to equal subterms.
   (define (check-term M)
     (define newM (rename M))
     (check-equal? newM (rename (uniqify M)))
